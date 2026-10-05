@@ -69,7 +69,7 @@ func TestNewGitHub(t *testing.T) {
 
 // TestGitHubWithFilter verifies that the URL returned for a filtered release
 // keeps the ?filter= parameter, so `bin update` doesn't lose it after the
-// first upgrade (https://github.com/marcosnils/bin/issues/302).
+// first upgrade (https://github.com/marcosnils/bin2/issues/302).
 func TestGitHubWithFilter(t *testing.T) {
 	cases := []struct {
 		name   string

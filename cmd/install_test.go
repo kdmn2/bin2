@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/marcosnils/bin/pkg/config"
-	"github.com/marcosnils/bin/pkg/providers"
+	"github.com/marcosnils/bin2/pkg/config"
+	"github.com/marcosnils/bin2/pkg/providers"
 )
 
 // Installed binaries must be runnable by everyone (e.g. root installing into

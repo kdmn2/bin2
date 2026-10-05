@@ -206,14 +206,14 @@ func TestGoInstallGetLatestVersionFromBuildInfo(t *testing.T) {
 	orig := goCommand
 	goCommand = func(args ...string) *exec.Cmd {
 		for i, a := range args {
-			if strings.HasPrefix(a, "github.com/marcosnils/bin@") {
+			if strings.HasPrefix(a, "github.com/marcosnils/bin2@") {
 				args[i] = "github.com/foo/bar@" + strings.SplitN(a, "@", 2)[1]
 			}
 		}
 		return orig(args...)
 	}
 
-	p, _ := newGoInstall("goinstall://github.com/marcosnils/bin/pkg/providers@main")
+	p, _ := newGoInstall("goinstall://github.com/marcosnils/bin2/pkg/providers@main")
 	p.(BinaryPathSetter).SetBinaryPath(exe)
 	v, u, err := p.GetLatestVersion()
 	if err != nil {
@@ -222,7 +222,7 @@ func TestGoInstallGetLatestVersionFromBuildInfo(t *testing.T) {
 	if v != "v1.5.1-0.20260101000000-abcdef123456" {
 		t.Errorf("version: got %q", v)
 	}
-	if u != "goinstall://github.com/marcosnils/bin/pkg/providers@main" {
+	if u != "goinstall://github.com/marcosnils/bin2/pkg/providers@main" {
 		t.Errorf("url must be the original goinstall url, got %q", u)
 	}
 	if got := calls(); len(got) != 1 || !strings.HasPrefix(got[0], "list -m -f {{.Version}} ") {

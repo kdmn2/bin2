@@ -39,6 +39,11 @@ type Binary struct {
 	// re-used to default the same artefact when upgrading
 	SelectedAsset string `json:"selected_asset"`
 	Pinned        bool   `json:"pinned"`
+	// Unpacked indicates this binary was installed from an archive which
+	// was fully extracted into AppDir. Path still points to the selected
+	// executable inside AppDir.
+	Unpacked bool   `json:"unpacked"`
+	AppDir   string `json:"app_dir"`
 }
 
 func CheckAndLoad() error {

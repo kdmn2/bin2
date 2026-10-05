@@ -1,8 +1,8 @@
 # bin - Effortless Binary Manager
 
-[![GitHub release](https://img.shields.io/github/release/marcosnils/bin.svg)](https://github.com/marcosnils/bin/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/marcosnils/bin)](https://goreportcard.com/report/github.com/marcosnils/bin)
-[![License](https://img.shields.io/github/license/marcosnils/bin.svg)](https://github.com/marcosnils/bin/blob/main/LICENSE)
+[![GitHub release](https://img.shields.io/github/release/marcosnils/bin.svg)](https://github.com/marcosnils/bin2/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/marcosnils/bin2)](https://goreportcard.com/report/github.com/marcosnils/bin2)
+[![License](https://img.shields.io/github/license/marcosnils/bin.svg)](https://github.com/marcosnils/bin2/blob/main/LICENSE)
 
 A lightweight, cross-platform binary manager that simplifies downloading, installing, and managing binaries without requiring root privileges.
 
@@ -27,14 +27,14 @@ While this makes distribution easier, it creates challenges for updates and trac
   - [HTTP Releases (Hashicorp, Helm)](#http-releases)
   - [Go Install](#go-install)
 
-For a comprehensive list, see the [Tools Wiki](https://github.com/marcosnils/bin/wiki/Tools-list).
+For a comprehensive list, see the [Tools Wiki](https://github.com/marcosnils/bin2/wiki/Tools-list).
 
 ## 📦 Installation
 
 ### Quick Install
 
-1. Download `bin` from the [releases](https://github.com/marcosnils/bin/releases)
-2. Run `./bin install github.com/marcosnils/bin` so `bin` is managed by `bin` itself
+1. Download `bin` from the [releases](https://github.com/marcosnils/bin2/releases)
+2. Run `./bin install github.com/marcosnils/bin2` so `bin` is managed by `bin` itself
 3. Run `bin ls` to make sure bin has been installed correctly. You can now remove the first file you downloaded.
 4. Enjoy!
 
@@ -268,7 +268,7 @@ Ensure this directory is in your `$PATH`.
 
 There are some bugs, and the code has not been tested due to a lack of time, but contributions are welcome, and I’ll be happy to discuss and review them.
 
-- Report bugs or request features via [GitHub Issues](https://github.com/marcosnils/bin/issues)
+- Report bugs or request features via [GitHub Issues](https://github.com/marcosnils/bin2/issues)
 - Submit pull requests for improvements
 - Update documentation
 
@@ -276,7 +276,7 @@ There are some bugs, and the code has not been tested due to a lack of time, but
 
 ```shell
 # Clone the repository
-git clone https://github.com/marcosnils/bin.git
+git clone https://github.com/marcosnils/bin2.git
 cd bin
 
 # Clean and init
@@ -305,3 +305,31 @@ I found myself downloading binaries (or tarballs) directly from VCS (Github most
 In addition to that, I was also looking for something that doesn't require `sudo` or `root` privileges to install these binaries as downloading, making them executable and storing it somewhere in your PATH would be sufficient.
 
 After I finished the first MVP, a friend pointed out that [brew](https://brew.sh) was now supported in linux which almost made me abandon the project. After checking out brew (never been an osx user), I found it a bit bloated and seems to be doing way more than what I'm actually needing. So, I've decided to continue `bin` and hopefully add more features that could result useful to someone else.
+
+## Unpack Install Mode (fork changes)
+
+This fork adds an opt-in "unpack" install mode and related safety/hardening. Summary of the new behavior and implementation details:
+
+- New flag: `--unpack` on `bin install` to extract a full release archive into a dedicated AppDir instead of copying a single binary into the PATH.
+- Persisted metadata for unpacked installs in the config Binary record:
+  - `Unpacked` (bool) marks installs created with `--unpack`
+  - `AppDir` (string) absolute path to the application directory where the archive is extracted
+  - `Path` is the absolute path to the chosen executable inside `AppDir`
+  - `Hash` stores sha256 of the original archive
+- Extraction safety:
+  - Defends against ZipSlip/path traversal during extraction
+  - Rejects symlink and hardlink entries inside archives
+  - Extracts to a temporary directory, verifies contents, then atomically renames into the final `AppDir`
+  - Atomic updates: new AppDir is extracted to tmp and then swapped in (existing AppDir moved to `.old` and removed on success). Rollback on failure.
+- Integrations: `install`, `update`, `ensure`, and `remove` are unpack-aware and will operate on `AppDir` for unpacked installs.
+- Tests: added unit tests covering zip extraction safety (ZipSlip and symlink rejection). Additional tests for tar.gz and higher-level lifecycle are planned.
+
+Files touched (high level):
+
+- `cmd/install.go`, `cmd/update.go`, `cmd/ensure.go`, `cmd/remove.go` — unpack-aware lifecycle
+- `cmd/unpack_helpers.go`, `pkg/assets/unpack_helpers.go` — extraction helpers and hardening
+- `pkg/assets/unpack_helpers_test.go` — unit tests for extraction safety
+- `pkg/config/config.go` — preserved unpack metadata fields
+- `README.md` — this summary
+
+If you'd like different wording, more detail for docs, or want me to open a PR instead of pushing to `main` on the fork, tell me and I'll adjust.

@@ -11,8 +11,8 @@ import (
 
 	"github.com/caarlos0/log"
 	"github.com/google/go-github/v31/github"
-	"github.com/marcosnils/bin/pkg/assets"
-	"github.com/marcosnils/bin/pkg/httpclient"
+	"github.com/marcosnils/bin2/pkg/assets"
+	"github.com/marcosnils/bin2/pkg/httpclient"
 	"golang.org/x/oauth2"
 )
 

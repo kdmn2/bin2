@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/caarlos0/log"
-	"github.com/marcosnils/bin/pkg/options"
+	"github.com/marcosnils/bin2/pkg/options"
 	"golang.org/x/sys/unix"
 )
 

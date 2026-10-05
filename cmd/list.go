@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/marcosnils/bin/pkg/config"
+	"github.com/marcosnils/bin2/pkg/config"
 	"github.com/spf13/cobra"
 )
 

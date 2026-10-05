@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/caarlos0/log"
-	"github.com/marcosnils/bin/pkg/assets"
-	"github.com/marcosnils/bin/pkg/httpclient"
+	"github.com/marcosnils/bin2/pkg/assets"
+	"github.com/marcosnils/bin2/pkg/httpclient"
 )
 
 const (

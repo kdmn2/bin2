@@ -1,4 +1,4 @@
-module github.com/marcosnils/bin
+module github.com/marcosnils/bin2
 
 go 1.26
 
