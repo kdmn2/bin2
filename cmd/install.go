@@ -9,10 +9,10 @@ import (
 	"strings"
 
 	"github.com/caarlos0/log"
-    "github.com/marcosnils/bin2/pkg/assets"
-    "github.com/marcosnils/bin2/pkg/config"
-    "github.com/marcosnils/bin2/pkg/options"
-    "github.com/marcosnils/bin2/pkg/providers"
+	"github.com/marcosnils/bin2/pkg/assets"
+	"github.com/marcosnils/bin2/pkg/config"
+	"github.com/marcosnils/bin2/pkg/options"
+	"github.com/marcosnils/bin2/pkg/providers"
 	"github.com/spf13/cobra"
 )
 
@@ -161,13 +161,13 @@ func newInstallCmd() *installCmd {
 					}
 				}
 
-                // Before moving into place, verify no symlinks inside tmpDir
-                if err := assets.VerifyNoSymlinks(tmpDir); err != nil {
-                    return fmt.Errorf("extracted archive failed safety checks: %w", err)
-                }
+				// Before moving into place, verify no symlinks inside tmpDir
+				if err := assets.VerifyNoSymlinks(tmpDir); err != nil {
+					return fmt.Errorf("extracted archive failed safety checks: %w", err)
+				}
 
-                // Move tmpDir into place as appDir
-                if err := os.Rename(tmpDir, appDir); err != nil {
+				// Move tmpDir into place as appDir
+				if err := os.Rename(tmpDir, appDir); err != nil {
 					// Attempt rollback
 					if oldAppDir != "" {
 						_ = os.Rename(oldAppDir, appDir)

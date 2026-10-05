@@ -9,9 +9,9 @@ import (
 
 	"github.com/caarlos0/log"
 	"github.com/fatih/color"
+	"github.com/marcosnils/bin2/pkg/assets"
 	"github.com/marcosnils/bin2/pkg/config"
-    "github.com/marcosnils/bin2/pkg/options"
-    "github.com/marcosnils/bin2/pkg/assets"
+	"github.com/marcosnils/bin2/pkg/options"
 	"github.com/marcosnils/bin2/pkg/providers"
 	"github.com/spf13/cobra"
 )
@@ -126,12 +126,12 @@ func newEnsureCmd() *ensureCmd {
 					}
 					af.Close()
 
-                    if err := extractArchiveToDir(archivePath, tmpDir); err != nil {
-                        return fmt.Errorf("error extracting archive: %w", err)
-                    }
-                    if err := assets.VerifyNoSymlinks(tmpDir); err != nil {
-                        return fmt.Errorf("extracted archive failed safety checks: %w", err)
-                    }
+					if err := extractArchiveToDir(archivePath, tmpDir); err != nil {
+						return fmt.Errorf("error extracting archive: %w", err)
+					}
+					if err := assets.VerifyNoSymlinks(tmpDir); err != nil {
+						return fmt.Errorf("extracted archive failed safety checks: %w", err)
+					}
 
 					execs, err := findExecutablesInDir(tmpDir)
 					if err != nil {

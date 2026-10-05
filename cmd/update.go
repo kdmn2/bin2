@@ -10,9 +10,9 @@ import (
 	"github.com/caarlos0/log"
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-version"
+	"github.com/marcosnils/bin2/pkg/assets"
 	"github.com/marcosnils/bin2/pkg/config"
-    "github.com/marcosnils/bin2/pkg/options"
-    "github.com/marcosnils/bin2/pkg/assets"
+	"github.com/marcosnils/bin2/pkg/options"
 	"github.com/marcosnils/bin2/pkg/prompt"
 	"github.com/marcosnils/bin2/pkg/providers"
 	"github.com/spf13/cobra"
@@ -185,12 +185,12 @@ func newUpdateCmd() *updateCmd {
 					}
 					af.Close()
 
-                    if err := extractArchiveToDir(archivePath, tmpDir); err != nil {
-                        return fmt.Errorf("error extracting archive: %w", err)
-                    }
-                    if err := assets.VerifyNoSymlinks(tmpDir); err != nil {
-                        return fmt.Errorf("extracted archive failed safety checks: %w", err)
-                    }
+					if err := extractArchiveToDir(archivePath, tmpDir); err != nil {
+						return fmt.Errorf("error extracting archive: %w", err)
+					}
+					if err := assets.VerifyNoSymlinks(tmpDir); err != nil {
+						return fmt.Errorf("extracted archive failed safety checks: %w", err)
+					}
 
 					// find executables in tmpDir
 					execs, err := findExecutablesInDir(tmpDir)

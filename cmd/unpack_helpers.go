@@ -1,7 +1,7 @@
 package cmd
 
 import (
-    assetsPkg "github.com/marcosnils/bin2/pkg/assets"
+	assetsPkg "github.com/marcosnils/bin2/pkg/assets"
 	"os"
 	"path/filepath"
 	"runtime"
