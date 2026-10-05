@@ -54,8 +54,8 @@ func TestInstallUpdateUnpackedLifecycle(t *testing.T) {
 	}
 	f.Close()
 
-    // Use a mock provider that returns this archive when requested
-    mp := &mockArchiveProvider{archivePath: archive, name: "mytool", version: "0.1.0"}
+	// Use a mock provider that returns this archive when requested
+	mp := &mockArchiveProvider{archivePath: archive, name: "mytool", version: "0.1.0"}
 
 	// Simulate install --unpack
 	// The install command expects a provider; to keep test hermetic we call the unpack logic directly

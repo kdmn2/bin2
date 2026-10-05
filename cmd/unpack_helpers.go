@@ -53,29 +53,68 @@ func extractArchiveToDir(archivePath, destDir string) error {
 // moveAtomic attempts to atomically move src to dst. If os.Rename fails
 // (e.g., EXDEV across filesystems), it falls back to a copy-and-remove
 // strategy. Works for files and directories.
-func moveAtomic(src, dst string) error {
-	if err := os.Rename(src, dst); err == nil {
-		return nil
-	}
-	// Fallback copy strategy
-	if _, statErr := os.Stat(dst); statErr == nil {
-		return fmt.Errorf("destination already exists: %s", dst)
-	}
-	si, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-	if si.IsDir() {
-		if err := copyDir(src, dst); err != nil {
-			return fmt.Errorf("copy fallback failed: %w", err)
-		}
-		return os.RemoveAll(src)
-	}
-	if err := copyFile(src, dst); err != nil {
-		return fmt.Errorf("copy fallback failed: %w", err)
-	}
-	return os.Remove(src)
+// moveAtomicImpl implements the atomic move with cross-filesystem fallback.
+func moveAtomicImpl(src, dst string) error {
+    if err := renameFunc(src, dst); err == nil {
+        return nil
+    }
+    // Fallback: create a temporary directory on the destination filesystem
+    // and copy into it, fsync contents, then rename into place.
+    if _, statErr := os.Stat(dst); statErr == nil {
+        return fmt.Errorf("destination already exists: %s", dst)
+    }
+
+    si, err := os.Stat(src)
+    if err != nil {
+        return err
+    }
+
+    dstParent := filepath.Dir(dst)
+    tmpDest, err := os.MkdirTemp(dstParent, ".tmp_move_dest_*")
+    if err != nil {
+        return fmt.Errorf("could not create temp dir on destination: %w", err)
+    }
+    // clean up temp dir on errors
+    cleanup := func(err error) error {
+        _ = os.RemoveAll(tmpDest)
+        return err
+    }
+
+    if si.IsDir() {
+        // Copy into a directory inside tmpDest with the final basename
+        finalName := filepath.Base(dst)
+        tmpEntry := filepath.Join(tmpDest, finalName)
+        if err := copyDir(src, tmpEntry); err != nil {
+            return cleanup(fmt.Errorf("copy fallback failed: %w", err))
+        }
+        if err := fsyncTree(tmpEntry); err != nil {
+            return cleanup(fmt.Errorf("fsync failed: %w", err))
+        }
+        if err := renameFunc(tmpEntry, dst); err != nil {
+            return cleanup(fmt.Errorf("rename of temp dest failed: %w", err))
+        }
+        _ = os.RemoveAll(tmpDest)
+        return os.RemoveAll(src)
+    }
+
+    // src is a file. Copy to tmpDest/<basename>
+    base := filepath.Base(dst)
+    tmpFile := filepath.Join(tmpDest, base)
+    if err := copyFile(src, tmpFile); err != nil {
+        return cleanup(fmt.Errorf("copy fallback failed: %w", err))
+    }
+    if err := fsyncFile(tmpFile); err != nil {
+        return cleanup(fmt.Errorf("fsync failed: %w", err))
+    }
+    if err := renameFunc(tmpFile, dst); err != nil {
+        return cleanup(fmt.Errorf("rename of temp dest failed: %w", err))
+    }
+    _ = os.RemoveAll(tmpDest)
+    return os.Remove(src)
 }
+
+// moveAtomic is a variable so tests can override behavior to simulate failures.
+var moveAtomic = moveAtomicImpl
 
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
@@ -126,7 +165,7 @@ func copyDir(src, dst string) error {
 
 // ensureNoSymlinkInPath checks that no component between base (inclusive)
 // and target (inclusive) is a symlink. Returns error if a symlink is found.
-func ensureNoSymlinkInPath(base, target string) error {
+func ensureNoSymlinkInPathImpl(base, target string) error {
 	base = filepath.Clean(base)
 	target = filepath.Clean(target)
 	rel, err := filepath.Rel(base, target)
@@ -163,3 +202,6 @@ func ensureNoSymlinkInPath(base, target string) error {
 	}
 	return nil
 }
+
+// ensureNoSymlinkInPath is a variable wrapper so tests can override it if needed.
+var ensureNoSymlinkInPath = ensureNoSymlinkInPathImpl

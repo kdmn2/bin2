@@ -46,14 +46,18 @@ func newRemoveCmd() *removeCmd {
 					existingToRemove = append(existingToRemove, ebp)
 
 					// If this binary was an unpacked install, remove the whole AppDir
-					if binCfg.Unpacked && binCfg.AppDir != "" {
-						// Basic sanity: do not remove root or home
-						if binCfg.AppDir == "/" || binCfg.AppDir == "" {
-							return fmt.Errorf("refusing to remove unsafe AppDir: %s", binCfg.AppDir)
-						}
-						if err := os.RemoveAll(binCfg.AppDir); err != nil && !os.IsNotExist(err) {
-							return fmt.Errorf("error removing app directory %s: %v", binCfg.AppDir, err)
-						}
+                    if binCfg.Unpacked && binCfg.AppDir != "" {
+                        // Basic sanity: do not remove root or home
+                        if binCfg.AppDir == "/" || binCfg.AppDir == "" {
+                            return fmt.Errorf("refusing to remove unsafe AppDir: %s", binCfg.AppDir)
+                        }
+                        // Ensure no symlink in the path we're about to remove
+                        if err := ensureNoSymlinkInPath(filepath.Dir(binCfg.AppDir), binCfg.AppDir); err != nil {
+                            return fmt.Errorf("refusing to remove unsafe AppDir (symlink detected): %w", err)
+                        }
+                        if err := os.RemoveAll(binCfg.AppDir); err != nil && !os.IsNotExist(err) {
+                            return fmt.Errorf("error removing app directory %s: %v", binCfg.AppDir, err)
+                        }
 					} else {
 						// Normal single-file installation: remove the file
 						if err := os.Remove(os.ExpandEnv(bp)); err != nil && !os.IsNotExist(err) {
