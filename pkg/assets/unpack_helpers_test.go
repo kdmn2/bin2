@@ -65,3 +65,54 @@ func TestExtractZip_RejectsSymlink(t *testing.T) {
         t.Fatalf("expected extraction to fail due to path traversal")
     }
 }
+
+func TestExtractTarGz_RejectsSymlinkAndZipSlip(t *testing.T) {
+    // Create a tar.gz in memory with a file that tries to escape and a symlink
+    // We'll write a simple tar.gz fixture to disk
+    dir := t.TempDir()
+    archive := filepath.Join(dir, "a.tar.gz")
+    // create tar.gz with an entry ../escape and a regular file
+    // For simplicity, use shell tar if available
+    // create files
+    base := filepath.Join(dir, "src")
+    if err := os.MkdirAll(base, 0o755); err != nil {
+        t.Fatalf("mkdir: %v", err)
+    }
+    if err := os.WriteFile(filepath.Join(base, "ok.txt"), []byte("ok"), 0o600); err != nil {
+        t.Fatalf("write: %v", err)
+    }
+    // create a malicious name via tar header: use pax to insert ../escape; easiest via go tar writer,
+    // but building here for brevity we'll use the go stdlib
+    f, err := os.Create(archive)
+    if err != nil {
+        t.Fatalf("create archive: %v", err)
+    }
+    gw := gzip.NewWriter(f)
+    tw := tar.NewWriter(gw)
+    // malicious entry
+    if err := tw.WriteHeader(&tar.Header{Name: "../escape", Mode: 0600, Size: int64(len("x"))}); err != nil {
+        t.Fatalf("tar write header: %v", err)
+    }
+    if _, err := tw.Write([]byte("x")); err != nil {
+        t.Fatalf("tar write body: %v", err)
+    }
+    // normal entry
+    if err := tw.WriteHeader(&tar.Header{Name: "ok.txt", Mode: 0600, Size: int64(len("ok"))}); err != nil {
+        t.Fatalf("tar write header2: %v", err)
+    }
+    if _, err := tw.Write([]byte("ok")); err != nil {
+        t.Fatalf("tar write body2: %v", err)
+    }
+    tw.Close()
+    gw.Close()
+    f.Close()
+
+    outdir := filepath.Join(dir, "out")
+    if err := os.MkdirAll(outdir, 0o755); err != nil {
+        t.Fatalf("mkdir out: %v", err)
+    }
+
+    if err := ExtractArchiveToDir(archive, outdir); err == nil {
+        t.Fatalf("expected tar extraction to fail due to path traversal")
+    }
+}
