@@ -1,8 +1,8 @@
 # bin - Effortless Binary Manager
 
-[![GitHub release](https://img.shields.io/github/release/marcosnils/bin.svg)](https://github.com/marcosnils/bin2/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/marcosnils/bin2)](https://goreportcard.com/report/github.com/marcosnils/bin2)
-[![License](https://img.shields.io/github/license/marcosnils/bin.svg)](https://github.com/marcosnils/bin2/blob/main/LICENSE)
+[![GitHub release](https://img.shields.io/github/release/kdmn2/bin2.svg)](https://github.com/kdmn2/bin2/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kdmn2/bin2)](https://goreportcard.com/report/github.com/kdmn2/bin2)
+[![License](https://img.shields.io/github/license/kdmn2/bin2.svg)](https://github.com/kdmn2/bin2/blob/main/LICENSE)
 
 A lightweight, cross-platform binary manager that simplifies downloading, installing, and managing binaries without requiring root privileges.
 
@@ -27,14 +27,14 @@ While this makes distribution easier, it creates challenges for updates and trac
   - [HTTP Releases (Hashicorp, Helm)](#http-releases)
   - [Go Install](#go-install)
 
-For a comprehensive list, see the [Tools Wiki](https://github.com/marcosnils/bin2/wiki/Tools-list).
+For a comprehensive list, see the [Tools Wiki](https://github.com/kdmn2/bin2/wiki/Tools-list).
 
 ## 📦 Installation
 
 ### Quick Install
 
-1. Download `bin` from the [releases](https://github.com/marcosnils/bin2/releases)
-2. Run `./bin install github.com/marcosnils/bin2` so `bin` is managed by `bin` itself
+1. Download `bin` from the [releases](https://github.com/kdmn2/bin2/releases)
+2. Run `./bin install github.com/kdmn2/bin2` so `bin` is managed by `bin` itself
 3. Run `bin ls` to make sure bin has been installed correctly. You can now remove the first file you downloaded.
 4. Enjoy!
 
@@ -276,8 +276,8 @@ There are some bugs, and the code has not been tested due to a lack of time, but
 
 ```shell
 # Clone the repository
-git clone https://github.com/marcosnils/bin2.git
-cd bin
+git clone https://github.com/kdmn2/bin2.git
+cd bin2
 
 # Clean and init
 make clean download
