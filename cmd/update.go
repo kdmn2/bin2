@@ -226,13 +226,21 @@ func newUpdateCmd() *updateCmd {
 					if _, err := os.Stat(appDir); err == nil {
 						oldApp = appDir + ".old"
 						_ = os.RemoveAll(oldApp)
-						if err := os.Rename(appDir, oldApp); err != nil {
+						if err := moveAtomic(appDir, oldApp); err != nil {
 							return fmt.Errorf("error moving existing app dir aside: %w", err)
 						}
 					}
-					if err := os.Rename(tmpDir, appDir); err != nil {
+
+					if err := ensureNoSymlinkInPath(parent, appDir); err != nil {
 						if oldApp != "" {
-							_ = os.Rename(oldApp, appDir)
+							_ = moveAtomic(oldApp, appDir)
+						}
+						return fmt.Errorf("unsafe path detected: %w", err)
+					}
+
+					if err := moveAtomic(tmpDir, appDir); err != nil {
+						if oldApp != "" {
+							_ = moveAtomic(oldApp, appDir)
 						}
 						return fmt.Errorf("error moving extracted app into place: %w", err)
 					}

@@ -21,19 +21,20 @@ func ExtractArchiveToDir(archivePath, destDir string) error {
 	}
 	defer f.Close()
 
-	// Try zip first
-	if strings.HasSuffix(strings.ToLower(archivePath), ".zip") {
+	// Try zip first by extension
+	lname := strings.ToLower(archivePath)
+	if strings.HasSuffix(lname, ".zip") {
 		if err := extractZip(f, destDir); err != nil {
 			return err
 		}
 		return verifyNoSymlinks(destDir)
 	}
-	// Try gzip + tar
-	if strings.HasSuffix(strings.ToLower(archivePath), ".tar.gz") || strings.HasSuffix(strings.ToLower(archivePath), ".tgz") {
+	// Try gzip + tar by extension
+	if strings.HasSuffix(lname, ".tar.gz") || strings.HasSuffix(lname, ".tgz") {
 		if err := extractTarGz(f, destDir); err != nil {
 			return err
 		}
-		return nil
+		return verifyNoSymlinks(destDir)
 	}
 	// Fallback: if looks like gz only
 	if strings.HasSuffix(strings.ToLower(archivePath), ".gz") {
@@ -63,14 +64,44 @@ func ExtractArchiveToDir(archivePath, destDir string) error {
 		return verifyNoSymlinks(destDir)
 	}
 
-	// As a last resort, try unzip (some archives might have no extension)
+	// If extension didn't help, try to sniff the file header
+	// Read a few bytes and reset offset
+	hdr := make([]byte, 8)
+	if _, err := f.Read(hdr); err != nil && err != io.EOF {
+		return err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	// gzip magic
+	if len(hdr) >= 2 && hdr[0] == 0x1f && hdr[1] == 0x8b {
+		if err := extractTarGz(f, destDir); err != nil {
+			return err
+		}
+		return verifyNoSymlinks(destDir)
+	}
+	// zip magic PK
+	if len(hdr) >= 2 && hdr[0] == 'P' && hdr[1] == 'K' {
+		if err := extractZip(f, destDir); err != nil {
+			return err
+		}
+		return verifyNoSymlinks(destDir)
+	}
+	// 7z signature: 0x37 0x7A 0xBC 0xAF 0x27 0x1C
+	if len(hdr) >= 6 && hdr[0] == 0x37 && hdr[1] == 0x7A && hdr[2] == 0xBC && hdr[3] == 0xAF && hdr[4] == 0x27 && hdr[5] == 0x1C {
+		if err := extract7z(archivePath, destDir); err != nil {
+			return err
+		}
+		return verifyNoSymlinks(destDir)
+	}
+
+	// As a last resort, try unzip
 	if err := extractZip(f, destDir); err == nil {
 		if err := verifyNoSymlinks(destDir); err != nil {
 			return err
 		}
 		return nil
 	}
-	// unsupported
 	return fmt.Errorf("unsupported archive format")
 }
 

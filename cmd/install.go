@@ -151,12 +151,12 @@ func newInstallCmd() *installCmd {
 					return fmt.Errorf("error creating parent directory: %w", err)
 				}
 
-				// If appDir exists, move it aside
+				// If appDir exists, move it aside (use moveAtomic to handle cross-fs)
 				var oldAppDir string
 				if _, err := os.Stat(appDir); err == nil {
 					oldAppDir = appDir + ".old"
 					_ = os.RemoveAll(oldAppDir)
-					if err := os.Rename(appDir, oldAppDir); err != nil {
+					if err := moveAtomic(appDir, oldAppDir); err != nil {
 						return fmt.Errorf("error moving existing app dir aside: %w", err)
 					}
 				}
@@ -166,11 +166,19 @@ func newInstallCmd() *installCmd {
 					return fmt.Errorf("extracted archive failed safety checks: %w", err)
 				}
 
-				// Move tmpDir into place as appDir
-				if err := os.Rename(tmpDir, appDir); err != nil {
+				// Ensure no symlinks in the target path
+				if err := ensureNoSymlinkInPath(parent, appDir); err != nil {
+					if oldAppDir != "" {
+						_ = moveAtomic(oldAppDir, appDir)
+					}
+					return fmt.Errorf("unsafe path detected: %w", err)
+				}
+
+				// Move tmpDir into place as appDir (atomic, with cross-fs fallback)
+				if err := moveAtomic(tmpDir, appDir); err != nil {
 					// Attempt rollback
 					if oldAppDir != "" {
-						_ = os.Rename(oldAppDir, appDir)
+						_ = moveAtomic(oldAppDir, appDir)
 					}
 					return fmt.Errorf("error moving extracted app into place: %w", err)
 				}
