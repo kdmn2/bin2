@@ -2,7 +2,7 @@ package providers
 
 import (
 	"github.com/caarlos0/log"
-	"github.com/marcosnils/bin/pkg/assets"
+	"github.com/marcosnils/bin2/pkg/assets"
 )
 
 // httpSource is a release source that publishes binaries on a plain HTTP

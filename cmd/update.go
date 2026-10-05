@@ -1,15 +1,20 @@
 package cmd
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/caarlos0/log"
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-version"
-	"github.com/marcosnils/bin/pkg/config"
-	"github.com/marcosnils/bin/pkg/prompt"
-	"github.com/marcosnils/bin/pkg/providers"
+	"github.com/marcosnils/bin2/pkg/assets"
+	"github.com/marcosnils/bin2/pkg/config"
+	"github.com/marcosnils/bin2/pkg/options"
+	"github.com/marcosnils/bin2/pkg/prompt"
+	"github.com/marcosnils/bin2/pkg/providers"
 	"github.com/spf13/cobra"
 )
 
@@ -137,6 +142,137 @@ func newUpdateCmd() *updateCmd {
 					return err
 				}
 				log.Debugf("Using provider '%s' for '%s'", p.GetID(), ui.url)
+
+				// If this binary was installed unpacked (archive extracted to AppDir)
+				// perform an unpack-aware update: fetch the full archive, extract to a
+				// temporary dir and atomically swap into place.
+				if b.Unpacked {
+					pResult, err := p.Fetch(&providers.FetchOpts{All: root.opts.all, PackagePath: b.PackagePath, SkipPatchCheck: root.opts.skipPathCheck, PackageName: b.RemoteName, PreviousAsset: b.SelectedAsset, PreviousVersion: b.Version, AutoSelectPrevious: !root.opts.all, Unpack: true})
+					if err != nil {
+						if root.opts.continueOnError {
+							updateFailures[b] = fmt.Errorf("Error while fetching %v: %w", ui.url, err)
+							continue
+						}
+						return err
+					}
+
+					// Determine appDir
+					appDir := b.AppDir
+					if appDir == "" {
+						// Fallback: use parent of executable path
+						appDir = filepath.Dir(b.Path)
+					}
+
+					parent := filepath.Dir(appDir)
+					tmpDir, err := os.MkdirTemp(parent, ".tmp_unpack_*")
+					if err != nil {
+						return fmt.Errorf("error creating temp dir for extraction: %w", err)
+					}
+					// Ensure cleanup on error
+					defer func() {
+						_ = os.RemoveAll(tmpDir)
+					}()
+
+					// Save archive
+					archivePath := filepath.Join(tmpDir, ".archive.tmp")
+					af, err := os.OpenFile(archivePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+					if err != nil {
+						return fmt.Errorf("error creating temp archive file: %w", err)
+					}
+					if _, err := io.Copy(af, pResult.Data); err != nil {
+						af.Close()
+						return fmt.Errorf("error writing archive to disk: %w", err)
+					}
+					af.Close()
+
+					if err := extractArchiveToDir(archivePath, tmpDir); err != nil {
+						return fmt.Errorf("error extracting archive: %w", err)
+					}
+					if err := assets.VerifyNoSymlinks(tmpDir); err != nil {
+						return fmt.Errorf("extracted archive failed safety checks: %w", err)
+					}
+
+					// find executables in tmpDir
+					execs, err := findExecutablesInDir(tmpDir)
+					if err != nil {
+						return fmt.Errorf("error scanning for executables: %w", err)
+					}
+					if len(execs) == 0 {
+						return fmt.Errorf("no executable found inside the archive")
+					}
+					var chosen string
+					if len(execs) == 1 {
+						chosen = execs[0]
+					} else {
+						opts := make([]fmt.Stringer, len(execs))
+						for i, e := range execs {
+							opts[i] = options.LiteralStringer(e)
+						}
+						choice, err := options.SelectWithDefault("Multiple executables found, select the entrypoint:", opts, -1)
+						if err != nil {
+							return err
+						}
+						chosen = choice.(fmt.Stringer).String()
+					}
+
+					// read archive bytes for hash
+					archiveBytes, err := os.ReadFile(archivePath)
+					if err != nil {
+						return fmt.Errorf("error reading archive for hash: %w", err)
+					}
+
+					// swap into place
+					var oldApp string
+					if _, err := os.Stat(appDir); err == nil {
+						oldApp = appDir + ".old"
+						_ = os.RemoveAll(oldApp)
+						if err := moveAtomic(appDir, oldApp); err != nil {
+							return fmt.Errorf("error moving existing app dir aside: %w", err)
+						}
+					}
+
+					if err := ensureNoSymlinkInPath(parent, appDir); err != nil {
+						if oldApp != "" {
+							_ = moveAtomic(oldApp, appDir)
+						}
+						return fmt.Errorf("unsafe path detected: %w", err)
+					}
+
+					if err := moveAtomic(tmpDir, appDir); err != nil {
+						if oldApp != "" {
+							_ = moveAtomic(oldApp, appDir)
+						}
+						return fmt.Errorf("error moving extracted app into place: %w", err)
+					}
+					if oldApp != "" {
+						_ = os.RemoveAll(oldApp)
+					}
+
+					absPath := filepath.Join(appDir, chosen)
+					absPath, err = filepath.Abs(absPath)
+					if err != nil {
+						return fmt.Errorf("error converting to absolute path: %w", err)
+					}
+
+					err = config.UpsertBinary(&config.Binary{
+						RemoteName:    pResult.Name,
+						Path:          absPath,
+						Version:       pResult.Version,
+						Hash:          fmt.Sprintf("%x", sha256.Sum256(archiveBytes)),
+						URL:           ui.url,
+						Provider:      p.GetID(),
+						PackagePath:   pResult.PackagePath,
+						SelectedAsset: pResult.SelectedAsset,
+						Unpacked:      true,
+						AppDir:        appDir,
+					})
+					if err != nil {
+						return err
+					}
+
+					log.Infof("Done updating %s to %s", os.ExpandEnv(b.Path), color.GreenString(ui.version))
+					continue
+				}
 
 				pResult, err := p.Fetch(&providers.FetchOpts{All: root.opts.all, PackagePath: b.PackagePath, SkipPatchCheck: root.opts.skipPathCheck, PackageName: b.RemoteName, PreviousAsset: b.SelectedAsset, PreviousVersion: b.Version, AutoSelectPrevious: !root.opts.all})
 				if err != nil {

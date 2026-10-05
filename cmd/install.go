@@ -9,9 +9,10 @@ import (
 	"strings"
 
 	"github.com/caarlos0/log"
-	"github.com/marcosnils/bin/pkg/assets"
-	"github.com/marcosnils/bin/pkg/config"
-	"github.com/marcosnils/bin/pkg/providers"
+	"github.com/marcosnils/bin2/pkg/assets"
+	"github.com/marcosnils/bin2/pkg/config"
+	"github.com/marcosnils/bin2/pkg/options"
+	"github.com/marcosnils/bin2/pkg/providers"
 	"github.com/spf13/cobra"
 )
 
@@ -25,6 +26,7 @@ type installOpts struct {
 	provider string
 	all      bool
 	name     string
+	unpack   bool
 }
 
 func newInstallCmd() *installCmd {
@@ -61,7 +63,7 @@ func newInstallCmd() *installCmd {
 			}
 			log.Debugf("Using provider '%s' for '%s'", p.GetID(), u)
 
-			pResult, err := p.Fetch(&providers.FetchOpts{All: root.opts.all, NamePattern: root.opts.name})
+			pResult, err := p.Fetch(&providers.FetchOpts{All: root.opts.all, NamePattern: root.opts.name, Unpack: root.opts.unpack})
 			if err != nil {
 				return err
 			}
@@ -69,6 +71,147 @@ func newInstallCmd() *installCmd {
 			resolvedPath, err = checkFinalPath(resolvedPath, assets.SanitizeName(pResult.Name, pResult.Version))
 			if err != nil {
 				return err
+			}
+
+			// If unpack was requested the provider will return the raw archive
+			// so handle that special case: extract all files into a dedicated
+			// application directory and register a chosen executable inside it.
+			if root.opts.unpack {
+				// resolvedPath is expected to be a directory or a path inside
+				// the default path; determine intended final appDir
+				appDir := resolvedPath
+				// If resolvedPath points to a file-like path, turn it into a directory
+				if filepath.Ext(appDir) != "" {
+					appDir = filepath.Join(filepath.Dir(appDir), assets.SanitizeName(pResult.Name, pResult.Version))
+				}
+
+				// Create a temporary directory next to the final app dir and extract there
+				parent := filepath.Dir(appDir)
+				if parent == "" || parent == "." {
+					parent = config.Get().DefaultPath
+				}
+				tmpDir, err := os.MkdirTemp(parent, ".tmp_unpack_*")
+				if err != nil {
+					return fmt.Errorf("error creating temp dir for extraction: %w", err)
+				}
+				// Clean up tmpDir on error
+				defer func() {
+					_ = os.RemoveAll(tmpDir)
+				}()
+
+				// Save archive to temp file inside tmpDir
+				archivePath := filepath.Join(tmpDir, ".archive.tmp")
+				af, err := os.OpenFile(archivePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+				if err != nil {
+					return fmt.Errorf("error creating temp archive file: %w", err)
+				}
+				if _, err := io.Copy(af, pResult.Data); err != nil {
+					af.Close()
+					return fmt.Errorf("error writing archive to disk: %w", err)
+				}
+				af.Close()
+
+				// Extract into tmpDir
+				if err := extractArchiveToDir(archivePath, tmpDir); err != nil {
+					return fmt.Errorf("error extracting archive: %w", err)
+				}
+
+				// Find executables under tmpDir
+				execs, err := findExecutablesInDir(tmpDir)
+				if err != nil {
+					return fmt.Errorf("error scanning for executables: %w", err)
+				}
+				if len(execs) == 0 {
+					return fmt.Errorf("no executable found inside the archive")
+				}
+				var chosen string
+				if len(execs) == 1 {
+					chosen = execs[0]
+				} else {
+					opts := make([]fmt.Stringer, len(execs))
+					for i, e := range execs {
+						opts[i] = options.LiteralStringer(e)
+					}
+					choice, err := options.SelectWithDefault("Multiple executables found, select the entrypoint:", opts, -1)
+					if err != nil {
+						return err
+					}
+					chosen = choice.(fmt.Stringer).String()
+				}
+
+				// Compute hash of archive file
+				archiveBytes, err := os.ReadFile(archivePath)
+				if err != nil {
+					return fmt.Errorf("error reading archive for hash: %w", err)
+				}
+				// Prepare final appDir swap
+				// If appDir already exists, move it aside atomically
+				// Ensure final parent exists
+				if err := os.MkdirAll(parent, 0o755); err != nil {
+					return fmt.Errorf("error creating parent directory: %w", err)
+				}
+
+				// If appDir exists, move it aside (use moveAtomic to handle cross-fs)
+				var oldAppDir string
+				if _, err := os.Stat(appDir); err == nil {
+					oldAppDir = appDir + ".old"
+					_ = os.RemoveAll(oldAppDir)
+					if err := moveAtomic(appDir, oldAppDir); err != nil {
+						return fmt.Errorf("error moving existing app dir aside: %w", err)
+					}
+				}
+
+				// Before moving into place, verify no symlinks inside tmpDir
+				if err := assets.VerifyNoSymlinks(tmpDir); err != nil {
+					return fmt.Errorf("extracted archive failed safety checks: %w", err)
+				}
+
+				// Ensure no symlinks in the target path
+				if err := ensureNoSymlinkInPath(parent, appDir); err != nil {
+					if oldAppDir != "" {
+						_ = moveAtomic(oldAppDir, appDir)
+					}
+					return fmt.Errorf("unsafe path detected: %w", err)
+				}
+
+				// Move tmpDir into place as appDir (atomic, with cross-fs fallback)
+				if err := moveAtomic(tmpDir, appDir); err != nil {
+					// Attempt rollback
+					if oldAppDir != "" {
+						_ = moveAtomic(oldAppDir, appDir)
+					}
+					return fmt.Errorf("error moving extracted app into place: %w", err)
+				}
+
+				// Cleanup old app dir
+				if oldAppDir != "" {
+					_ = os.RemoveAll(oldAppDir)
+				}
+
+				absPath := filepath.Join(appDir, chosen)
+				absPath, err = filepath.Abs(absPath)
+				if err != nil {
+					return fmt.Errorf("error converting to absolute path: %w", err)
+				}
+
+				// Store configuration pointing to the executable inside the app dir
+				if err := config.UpsertBinary(&config.Binary{
+					RemoteName:    pResult.Name,
+					Path:          absPath,
+					Version:       pResult.Version,
+					Hash:          fmt.Sprintf("%x", sha256.Sum256(archiveBytes)),
+					URL:           u,
+					Provider:      p.GetID(),
+					PackagePath:   pResult.PackagePath,
+					SelectedAsset: pResult.SelectedAsset,
+					Unpacked:      true,
+					AppDir:        appDir,
+				}); err != nil {
+					return err
+				}
+
+				log.Infof("Done installing %s %s", pResult.Name, pResult.Version)
+				return nil
 			}
 
 			hash, err := saveToDisk(pResult, resolvedPath, root.opts.force)
@@ -107,6 +250,7 @@ func newInstallCmd() *installCmd {
 	root.cmd.Flags().BoolVarP(&root.opts.all, "all", "a", false, "Show all possible download options (skip scoring & filtering)")
 	root.cmd.Flags().StringVarP(&root.opts.provider, "provider", "p", "", "Forces to use a specific provider")
 	root.cmd.Flags().StringVarP(&root.opts.name, "name", "n", "", "Glob pattern to select a specific asset (use asset/file for archive contents)")
+	root.cmd.Flags().BoolVar(&root.opts.unpack, "unpack", false, "Extract the full archive into a dedicated application directory and select the executable inside")
 	return root
 }
 

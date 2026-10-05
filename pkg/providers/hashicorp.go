@@ -11,9 +11,9 @@ import (
 
 	"github.com/caarlos0/log"
 	"github.com/coreos/go-semver/semver"
-	"github.com/marcosnils/bin/pkg/assets"
-	"github.com/marcosnils/bin/pkg/httpclient"
-	"github.com/marcosnils/bin/pkg/options"
+	"github.com/marcosnils/bin2/pkg/assets"
+	"github.com/marcosnils/bin2/pkg/httpclient"
+	"github.com/marcosnils/bin2/pkg/options"
 )
 
 const (

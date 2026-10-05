@@ -19,10 +19,10 @@ import (
 	"github.com/h2non/filetype/matchers"
 	"github.com/h2non/filetype/types"
 	"github.com/krolaw/zipstream"
-	"github.com/marcosnils/bin/pkg/config"
-	"github.com/marcosnils/bin/pkg/httpclient"
-	"github.com/marcosnils/bin/pkg/options"
-	bstrings "github.com/marcosnils/bin/pkg/strings"
+	"github.com/marcosnils/bin2/pkg/config"
+	"github.com/marcosnils/bin2/pkg/httpclient"
+	"github.com/marcosnils/bin2/pkg/options"
+	bstrings "github.com/marcosnils/bin2/pkg/strings"
 	"github.com/xi2/xz"
 )
 
@@ -95,6 +95,10 @@ type FilterOpts struct {
 	// and the part after matches files inside archives. Without a slash the
 	// whole pattern matches top-level asset names only.
 	NamePattern string
+
+	// When true, callers want the full archive returned instead of selecting
+	// a single file from it. This enables the --unpack behaviour.
+	Unpack bool
 
 	// PreferredAsset is the top-level asset name chosen on a previous
 	// install/upgrade and PreferredVersion is the version it was chosen at.
@@ -444,6 +448,12 @@ func (f *Filter) ProcessURL(gf *FilteredAsset) (*finalFile, error) {
 		return nil, err
 	}
 	bar.Finish()
+	// If caller asked for the raw archive (unpack) return it directly so
+	// the caller can extract the entire archive into a directory.
+	if f.opts != nil && f.opts.Unpack {
+		return &finalFile{Source: buf, Name: f.name, PackagePath: ""}, nil
+	}
+
 	return f.processReader(buf)
 }
 

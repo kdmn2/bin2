@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/marcosnils/bin/pkg/config"
+	"github.com/marcosnils/bin2/pkg/config"
 	"github.com/spf13/cobra"
 )
 
@@ -42,14 +42,27 @@ func newRemoveCmd() *removeCmd {
 					return err
 				}
 				ebp := os.ExpandEnv(bp)
-				if _, ok := bins[ebp]; ok {
+				if binCfg, ok := bins[ebp]; ok {
 					existingToRemove = append(existingToRemove, ebp)
 
-					// TODO some providers (like docker) might download
-					// additional things somewhere else, maybe we should
-					// call the provider to do a cleanup here.
-					if err := os.Remove(os.ExpandEnv(bp)); err != nil && !os.IsNotExist(err) {
-						return fmt.Errorf("error removing path %s: %v", os.ExpandEnv(bp), err)
+					// If this binary was an unpacked install, remove the whole AppDir
+                    if binCfg.Unpacked && binCfg.AppDir != "" {
+                        // Basic sanity: do not remove root or home
+                        if binCfg.AppDir == "/" || binCfg.AppDir == "" {
+                            return fmt.Errorf("refusing to remove unsafe AppDir: %s", binCfg.AppDir)
+                        }
+                        // Ensure no symlink in the path we're about to remove
+                        if err := ensureNoSymlinkInPath(filepath.Dir(binCfg.AppDir), binCfg.AppDir); err != nil {
+                            return fmt.Errorf("refusing to remove unsafe AppDir (symlink detected): %w", err)
+                        }
+                        if err := os.RemoveAll(binCfg.AppDir); err != nil && !os.IsNotExist(err) {
+                            return fmt.Errorf("error removing app directory %s: %v", binCfg.AppDir, err)
+                        }
+					} else {
+						// Normal single-file installation: remove the file
+						if err := os.Remove(os.ExpandEnv(bp)); err != nil && !os.IsNotExist(err) {
+							return fmt.Errorf("error removing path %s: %v", os.ExpandEnv(bp), err)
+						}
 					}
 					continue
 				}

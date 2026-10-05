@@ -18,6 +18,9 @@ type File struct {
 	Version     string
 	Length      int64
 	PackagePath string
+	// Unpack indicates the file represents a full archive that should be
+	// extracted into a directory rather than installed as a single binary.
+	Unpack bool
 	// SelectedAsset is the top-level release asset name that was chosen,
 	// stored so the same artefact can be defaulted on the next upgrade
 	SelectedAsset string
@@ -38,6 +41,9 @@ type FetchOpts struct {
 	SkipPatchCheck bool
 	Version        string
 	NamePattern    string
+	// Unpack requests that the provider return the full archive for later
+	// extraction instead of selecting a single file from it.
+	Unpack bool
 	// PreviousAsset is the top-level asset name selected on the previous
 	// install/upgrade, and PreviousVersion is the version it was selected at.
 	// On upgrades these let bin re-select the same artefact across versions.
